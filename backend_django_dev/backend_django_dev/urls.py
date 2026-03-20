@@ -13,6 +13,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", health),
     path("api/", include("backend_api.urls")),
+    path("api/ecommerce/", include("ecommerce.urls")),
     path(
         "api/schema/",
         SpectacularAPIView.as_view(permission_classes=[AllowAny]),

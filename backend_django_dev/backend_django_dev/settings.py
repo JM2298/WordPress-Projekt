@@ -6,6 +6,8 @@ import dj_database_url
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Load example defaults first, then local overrides from .env.
+load_dotenv(BASE_DIR / ".env.example")
 load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key-change-me")
@@ -27,6 +29,7 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "channels",
     "backend_api.apps.BackendApiConfig",
+    "ecommerce.apps.EcommerceConfig",
 ]
 
 MIDDLEWARE = [
@@ -122,3 +125,10 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "API documentation",
     "VERSION": "1.0.0",
 }
+
+WOOCOMMERCE_STORE_URL = os.getenv("WOOCOMMERCE_STORE_URL", "").rstrip("/")
+WOOCOMMERCE_CONSUMER_KEY = os.getenv("WOOCOMMERCE_CONSUMER_KEY", "")
+WOOCOMMERCE_CONSUMER_SECRET = os.getenv("WOOCOMMERCE_CONSUMER_SECRET", "")
+WOOCOMMERCE_TIMEOUT_SECONDS = int(os.getenv("WOOCOMMERCE_TIMEOUT_SECONDS", "15"))
+WOOCOMMERCE_AUTH_METHOD = os.getenv("WOOCOMMERCE_AUTH_METHOD", "auto").lower()
+WOOCOMMERCE_SIGNATURE_BASE_URL = os.getenv("WOOCOMMERCE_SIGNATURE_BASE_URL", "").rstrip("/")
