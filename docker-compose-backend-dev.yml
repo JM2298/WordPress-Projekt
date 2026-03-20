@@ -1,0 +1,116 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: backend_postgres_dev
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: backend_redis_dev
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  django:
+    build:
+      context: .
+      dockerfile: backend_django_dev/Dockerfile
+    container_name: backend_django_dev
+    working_dir: /app/backend_django_dev
+    command: >
+      sh -c "python manage.py migrate &&
+             uvicorn backend_django_dev.asgi:application --host 0.0.0.0 --port 8000 --ws websockets"
+    volumes:
+      - .:/app
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-backend_django_dev.settings}
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    ports:
+      - "${BACKEND_PORT:-18000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: backend_django_dev/Dockerfile
+    container_name: backend_celery_worker_dev
+    working_dir: /app/backend_django_dev
+    command: >
+      sh -c "celery -A ${CELERY_APP:-backend_django_dev} worker -l ${CELERY_LOGLEVEL:-info} --uid=nobody --gid=nogroup"
+    volumes:
+      - .:/app
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-backend_django_dev.settings}
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      django:
+        condition: service_started
+    restart: unless-stopped
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: backend_django_dev/Dockerfile
+    container_name: backend_celery_beat_dev
+    working_dir: /app/backend_django_dev
+    command: >
+      sh -c "python manage.py migrate &&
+             celery -A ${CELERY_APP:-backend_django_dev} beat -l ${CELERY_LOGLEVEL:-info} --scheduler django_celery_beat.schedulers:DatabaseScheduler --uid=nobody --gid=nogroup ${CELERY_BEAT_EXTRA_ARGS:-}"
+    volumes:
+      - .:/app
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-backend_django_dev.settings}
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      django:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
