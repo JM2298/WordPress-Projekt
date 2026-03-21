@@ -11,7 +11,8 @@ export default function HomePage() {
           <code> /api/auth/register/</code>,
           <code> /api/auth/token/</code>,
           <code> /api/ecommerce/categories/</code>,
-          <code> /api/ecommerce/products/</code> oraz
+          <code> /api/ecommerce/products/</code>,
+          <code> /api/openai/products/generate-create/</code> oraz
           <code> /api/ecommerce/products/{`{id}`}/</code>.
         </p>
         <div className="cards">
@@ -31,6 +32,9 @@ export default function HomePage() {
         <div className="button-row" style={{ marginTop: 24 }}>
           <Link className="button" href="/dashboard">
             Otworz widok zarzadzania
+          </Link>
+          <Link className="secondary-button" href="/openai-products">
+            Otworz widok OpenAI
           </Link>
           <Link className="ghost-button" href="/products">
             Zobacz liste produktow

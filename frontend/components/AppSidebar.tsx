@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/dashboard", label: "Tworzenie kategorii i produktow" },
+  { href: "/openai-products", label: "OpenAI: generowanie produktu" },
   { href: "/products", label: "Lista produktow" },
   { href: "/login", label: "Logowanie" },
   { href: "/register", label: "Rejestracja" },
