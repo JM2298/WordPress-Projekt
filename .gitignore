@@ -3,8 +3,8 @@
 backend_django_dev/.env.example
 .DS_Store
 frontend_mobile
-BACKUP/*.sql
-BACKUP/**/*.sql
+!BACKUP/*.sql
+!BACKUP/**/*.sql
 secrets
 # Ignore all .env files except the example
 
