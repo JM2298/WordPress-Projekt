@@ -61,6 +61,20 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: frontend_next_dev
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:18000/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      django:
+        condition: service_started
+    restart: unless-stopped
+
   celery_worker:
     build:
       context: .

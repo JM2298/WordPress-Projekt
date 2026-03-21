@@ -10,3 +10,5 @@ secrets
 
 # Ignore all .env files
 *.env
+frontend/node_modules/
+frontend/.next/
