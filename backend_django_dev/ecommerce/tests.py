@@ -7,6 +7,10 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from backend_api.google_sheets import GoogleSheetsAPIError
+
+from .sheets import append_product_to_sheet
+
 
 class EcommerceApiTests(APITestCase):
     def setUp(self) -> None:
@@ -30,6 +34,7 @@ class EcommerceApiTests(APITestCase):
         WOOCOMMERCE_CONSUMER_KEY="ck_test",
         WOOCOMMERCE_CONSUMER_SECRET="cs_test",
         WOOCOMMERCE_TIMEOUT_SECONDS=15,
+        WOOCOMMERCE_AUTH_METHOD="basic",
     )
     @patch("ecommerce.services.requests.request")
     def test_create_category_without_authentication(self, request_mock: Mock) -> None:
@@ -52,6 +57,7 @@ class EcommerceApiTests(APITestCase):
         WOOCOMMERCE_CONSUMER_KEY="ck_test",
         WOOCOMMERCE_CONSUMER_SECRET="cs_test",
         WOOCOMMERCE_TIMEOUT_SECONDS=15,
+        WOOCOMMERCE_AUTH_METHOD="basic",
     )
     @patch("ecommerce.services.requests.request")
     def test_create_category(self, request_mock: Mock) -> None:
@@ -90,13 +96,23 @@ class EcommerceApiTests(APITestCase):
         WOOCOMMERCE_STORE_URL="https://shop.example.com",
         WOOCOMMERCE_CONSUMER_KEY="ck_test",
         WOOCOMMERCE_CONSUMER_SECRET="cs_test",
+        WOOCOMMERCE_AUTH_METHOD="basic",
     )
+    @patch("ecommerce.views.append_product_to_sheet")
+    @patch("ecommerce.views.send_product_created_email")
     @patch("ecommerce.services.requests.request")
-    def test_create_product(self, request_mock: Mock) -> None:
+    def test_create_product(
+        self,
+        request_mock: Mock,
+        notify_mock: Mock,
+        sheet_mock: Mock,
+    ) -> None:
         request_mock.return_value = self._mock_response(
             status.HTTP_201_CREATED,
             {"id": 42, "name": "Premium Quality"},
         )
+        notify_mock.return_value = 1
+        sheet_mock.return_value = {"updates": {"updatedRows": 1}}
 
         payload = {
             "name": "Premium Quality",
@@ -125,11 +141,90 @@ class EcommerceApiTests(APITestCase):
         )
         self.assertEqual(called_kwargs["json"], payload)
         self.assertEqual(called_kwargs["auth"], ("ck_test", "cs_test"))
+        notify_mock.assert_called_once_with({"id": 42, "name": "Premium Quality"})
+        sheet_mock.assert_called_once_with({"id": 42, "name": "Premium Quality"})
 
     @override_settings(
         WOOCOMMERCE_STORE_URL="https://shop.example.com",
         WOOCOMMERCE_CONSUMER_KEY="ck_test",
         WOOCOMMERCE_CONSUMER_SECRET="cs_test",
+        WOOCOMMERCE_AUTH_METHOD="basic",
+    )
+    @patch("ecommerce.views.append_product_to_sheet")
+    @patch("ecommerce.views.send_product_created_email")
+    @patch("ecommerce.services.requests.request")
+    def test_create_product_notification_failure_does_not_break_request(
+        self,
+        request_mock: Mock,
+        notify_mock: Mock,
+        sheet_mock: Mock,
+    ) -> None:
+        request_mock.return_value = self._mock_response(
+            status.HTTP_201_CREATED,
+            {"id": 77, "name": "Notify Failure Product"},
+        )
+        notify_mock.side_effect = RuntimeError("smtp error")
+        sheet_mock.return_value = {"updates": {"updatedRows": 1}}
+
+        payload = {
+            "name": "Notify Failure Product",
+            "type": "simple",
+            "regular_price": "11.99",
+        }
+
+        response = self.client.post(
+            reverse("ecommerce-products"),
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["id"], 77)
+        notify_mock.assert_called_once()
+        sheet_mock.assert_called_once_with({"id": 77, "name": "Notify Failure Product"})
+
+    @override_settings(
+        WOOCOMMERCE_STORE_URL="https://shop.example.com",
+        WOOCOMMERCE_CONSUMER_KEY="ck_test",
+        WOOCOMMERCE_CONSUMER_SECRET="cs_test",
+        WOOCOMMERCE_AUTH_METHOD="basic",
+    )
+    @patch("ecommerce.views.append_product_to_sheet")
+    @patch("ecommerce.views.send_product_created_email")
+    @patch("ecommerce.services.requests.request")
+    def test_create_product_sheet_sync_failure_does_not_break_request(
+        self,
+        request_mock: Mock,
+        notify_mock: Mock,
+        sheet_mock: Mock,
+    ) -> None:
+        request_mock.return_value = self._mock_response(
+            status.HTTP_201_CREATED,
+            {"id": 88, "name": "Sheet Failure Product"},
+        )
+        notify_mock.return_value = 1
+        sheet_mock.side_effect = RuntimeError("sheets error")
+
+        response = self.client.post(
+            reverse("ecommerce-products"),
+            {
+                "name": "Sheet Failure Product",
+                "type": "simple",
+                "regular_price": "49.99",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["id"], 88)
+        notify_mock.assert_called_once()
+        sheet_mock.assert_called_once_with({"id": 88, "name": "Sheet Failure Product"})
+
+    @override_settings(
+        WOOCOMMERCE_STORE_URL="https://shop.example.com",
+        WOOCOMMERCE_CONSUMER_KEY="ck_test",
+        WOOCOMMERCE_CONSUMER_SECRET="cs_test",
+        WOOCOMMERCE_AUTH_METHOD="basic",
     )
     @patch("ecommerce.services.requests.request")
     def test_list_products(self, request_mock: Mock) -> None:
@@ -155,6 +250,7 @@ class EcommerceApiTests(APITestCase):
         WOOCOMMERCE_STORE_URL="https://shop.example.com",
         WOOCOMMERCE_CONSUMER_KEY="ck_test",
         WOOCOMMERCE_CONSUMER_SECRET="cs_test",
+        WOOCOMMERCE_AUTH_METHOD="basic",
     )
     @patch("ecommerce.services.requests.request")
     def test_get_product_detail(self, request_mock: Mock) -> None:
@@ -210,3 +306,34 @@ class EcommerceApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         self.assertIn("Missing WooCommerce settings", response.json()["detail"])
         request_mock.assert_not_called()
+
+
+class EcommerceSheetsSyncTests(APITestCase):
+    @override_settings(GOOGLE_SHEETS_PRODUCTS_RANGE="Products!A:I")
+    @patch("ecommerce.sheets.append_row")
+    def test_append_product_to_sheet_retries_without_sheet_name(
+        self,
+        append_row_mock: Mock,
+    ) -> None:
+        append_row_mock.side_effect = [
+            GoogleSheetsAPIError(
+                "Google Sheets API returned an error while appending a row.",
+                status_code=400,
+                details={
+                    "response": {
+                        "error": {"message": "Unable to parse range: Products!A:I"}
+                    }
+                },
+            ),
+            {"updates": {"updatedRows": 1}},
+        ]
+
+        result = append_product_to_sheet({"id": 101, "name": "Retry Range Product"})
+
+        self.assertEqual(result, {"updates": {"updatedRows": 1}})
+        self.assertEqual(append_row_mock.call_count, 2)
+        self.assertEqual(
+            append_row_mock.call_args_list[0].kwargs["range_name"],
+            "Products!A:I",
+        )
+        self.assertEqual(append_row_mock.call_args_list[1].kwargs["range_name"], "A:I")

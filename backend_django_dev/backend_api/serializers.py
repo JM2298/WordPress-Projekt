@@ -58,3 +58,38 @@ class RegisterResponseSerializer(serializers.Serializer):
 class PingSerializer(serializers.Serializer):
     service = serializers.CharField()
     status = serializers.CharField()
+
+
+class SheetReadQuerySerializer(serializers.Serializer):
+    range_name = serializers.CharField(
+        required=False,
+        default="Arkusz1!A1:D20",
+        allow_blank=False,
+    )
+
+
+class SheetReadResponseSerializer(serializers.Serializer):
+    rows = serializers.ListField(
+        child=serializers.ListField(
+            child=serializers.JSONField(),
+            allow_empty=True,
+        ),
+        allow_empty=True,
+    )
+
+
+class SheetAppendRequestSerializer(serializers.Serializer):
+    row = serializers.ListField(
+        child=serializers.JSONField(),
+        allow_empty=False,
+    )
+    range_name = serializers.CharField(
+        required=False,
+        default="Arkusz1!A:D",
+        allow_blank=False,
+    )
+
+
+class SheetAppendResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    result = serializers.JSONField()

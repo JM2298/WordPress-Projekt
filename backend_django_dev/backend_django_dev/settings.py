@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "channels",
     "backend_api.apps.BackendApiConfig",
     "ecommerce.apps.EcommerceConfig",
+    "openai_api.apps.OpenaiApiConfig",
 ]
 
 MIDDLEWARE = [
@@ -77,6 +78,8 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -132,3 +135,37 @@ WOOCOMMERCE_CONSUMER_SECRET = os.getenv("WOOCOMMERCE_CONSUMER_SECRET", "")
 WOOCOMMERCE_TIMEOUT_SECONDS = int(os.getenv("WOOCOMMERCE_TIMEOUT_SECONDS", "15"))
 WOOCOMMERCE_AUTH_METHOD = os.getenv("WOOCOMMERCE_AUTH_METHOD", "auto").lower()
 WOOCOMMERCE_SIGNATURE_BASE_URL = os.getenv("WOOCOMMERCE_SIGNATURE_BASE_URL", "").rstrip("/")
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-5.4-nano-2026-03-17")
+OPENAI_IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1-mini")
+OPENAI_PRODUCTS_ENDPOINT = os.getenv(
+    "OPENAI_PRODUCTS_ENDPOINT",
+    "http://localhost:18000/api/ecommerce/products/",
+)
+OPENAI_PRODUCTS_TIMEOUT_SECONDS = int(
+    os.getenv("OPENAI_PRODUCTS_TIMEOUT_SECONDS", "30")
+)
+OPENAI_DEFAULT_CATEGORY_ID = int(os.getenv("OPENAI_DEFAULT_CATEGORY_ID", "1"))
+OPENAI_GENERATED_IMAGE_PUBLIC_URL_BASE = os.getenv(
+    "OPENAI_GENERATED_IMAGE_PUBLIC_URL_BASE",
+    "http://nginx",
+).rstrip("/")
+OPENAI_RETRY_WITHOUT_IMAGE_ON_UPLOAD_ERROR = (
+    os.getenv("OPENAI_RETRY_WITHOUT_IMAGE_ON_UPLOAD_ERROR", "1") == "1"
+)
+
+GOOGLE_SHEETS_PRODUCTS_RANGE = os.getenv("GOOGLE_SHEETS_PRODUCTS_RANGE", "A:I")
+
+
+
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "1") == "1"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "schizzzox@gmail.com")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)

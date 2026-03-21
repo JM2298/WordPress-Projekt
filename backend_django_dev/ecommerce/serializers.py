@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from rest_framework import serializers
 
 
@@ -16,7 +18,15 @@ class ProductCategorySerializer(serializers.Serializer):
 
 class ProductImageSerializer(serializers.Serializer):
     id = serializers.IntegerField(min_value=1, required=False)
-    src = serializers.URLField(required=False)
+    src = serializers.CharField(required=False)
+
+    def validate_src(self, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"}:
+            raise serializers.ValidationError("Image src must start with http or https.")
+        if not parsed.netloc:
+            raise serializers.ValidationError("Image src must include a host.")
+        return value
 
     def validate(self, attrs: dict) -> dict:
         if "id" not in attrs and "src" not in attrs:

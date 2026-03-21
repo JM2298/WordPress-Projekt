@@ -1,7 +1,11 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+
+from .google_sheets import GoogleSheetsAPIError, GoogleSheetsConfigurationError
 
 
 class BackendApiTests(APITestCase):
@@ -118,3 +122,74 @@ class BackendApiTests(APITestCase):
     def test_redoc_is_public(self) -> None:
         response = self.client.get(reverse("api-redoc"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @patch("backend_api.views.read_sheet")
+    def test_get_sheet_data(self, read_sheet_mock) -> None:
+        read_sheet_mock.return_value = [
+            ["Jan", "Kowalski", "jan@example.com", "OK"],
+        ]
+
+        response = self.client.get(
+            reverse("sheets-data"),
+            {"range_name": "Arkusz1!A1:D20"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.json(),
+            {"rows": [["Jan", "Kowalski", "jan@example.com", "OK"]]},
+        )
+        read_sheet_mock.assert_called_once_with(range_name="Arkusz1!A1:D20")
+
+    @patch("backend_api.views.append_row")
+    def test_save_to_sheet(self, append_row_mock) -> None:
+        append_row_mock.return_value = {"updates": {"updatedRows": 1}}
+
+        response = self.client.post(
+            reverse("save-to-sheet"),
+            {
+                "row": ["Jan", "Kowalski", "jan@example.com", "OK"],
+                "range_name": "Arkusz1!A:D",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "saved")
+        self.assertIn("result", response.data)
+        append_row_mock.assert_called_once_with(
+            row=["Jan", "Kowalski", "jan@example.com", "OK"],
+            range_name="Arkusz1!A:D",
+        )
+
+    @patch("backend_api.views.read_sheet")
+    def test_get_sheet_data_configuration_error(self, read_sheet_mock) -> None:
+        read_sheet_mock.side_effect = GoogleSheetsConfigurationError(
+            "Missing GOOGLE_SHEET_ID setting."
+        )
+
+        response = self.client.get(reverse("sheets-data"))
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(response.data["detail"], "Missing GOOGLE_SHEET_ID setting.")
+
+    @patch("backend_api.views.append_row")
+    def test_save_to_sheet_api_error(self, append_row_mock) -> None:
+        append_row_mock.side_effect = GoogleSheetsAPIError(
+            "Google Sheets API returned an error while appending a row.",
+            status_code=403,
+            details={"response": {"error": {"status": "PERMISSION_DENIED"}}},
+        )
+
+        response = self.client.post(
+            reverse("sheets-append"),
+            {"row": ["Jan", "Kowalski"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            response.data["detail"],
+            "Google Sheets API returned an error while appending a row.",
+        )
+        self.assertIn("error", response.data)

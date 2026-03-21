@@ -1,3 +1,5 @@
+import logging
+
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -5,12 +7,16 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from .notifications import send_product_created_email
+from .sheets import append_product_to_sheet
 from .serializers import CategoryCreateSerializer, ProductCreateSerializer
 from .services import (
     WooCommerceAPIError,
     WooCommerceClient,
     WooCommerceConfigurationError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _error_response(exc: Exception) -> Response:
@@ -68,6 +74,22 @@ def products(request: Request) -> Response:
         serializer = ProductCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         response_data = client.create_product(serializer.validated_data)
+
+        try:
+            notified = send_product_created_email(response_data)
+            logger.info("Product notification email sent to %s users.", notified)
+        except Exception:
+            logger.exception("Unable to send product-created notification emails.")
+
+        try:
+            append_result = append_product_to_sheet(response_data)
+            logger.info(
+                "Product synchronized to Google Sheets. updates=%s",
+                append_result.get("updates"),
+            )
+        except Exception:
+            logger.exception("Unable to synchronize product to Google Sheets.")
+
         return Response(response_data, status=status.HTTP_201_CREATED)
     except (WooCommerceConfigurationError, WooCommerceAPIError) as exc:
         return _error_response(exc)
